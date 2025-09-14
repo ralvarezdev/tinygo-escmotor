@@ -17,4 +17,5 @@ const (
 	ErrorCodeESCMotorSpeedOutOfRange
 	ErrorCodeESCMotorSpeedBelowMinPulseWidth
 	ErrorCodeESCMotorSpeedAboveMaxPulseWidth
+	ErrorCodeESCMotorNilHandler
 )

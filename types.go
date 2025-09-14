@@ -129,73 +129,73 @@ func NewDefaultHandler(
 // Returns:
 //
 // An error if the speed could not be set, otherwise nil.
-func (e *DefaultHandler) SetSpeed(speed uint16, isForward bool) tinygotypes.ErrorCode {
+func (h *DefaultHandler) SetSpeed(speed uint16, isForward bool) tinygotypes.ErrorCode {
 	// Check if the is polarity inverted
-	if e.isPolarityInverted {
+	if h.isPolarityInverted {
 		isForward = !isForward
 	}
 
 	// Check if the speed is within the valid range
-	if speed > e.maxSpeed {
+	if speed > h.maxSpeed {
 		return ErrorCodeESCMotorSpeedOutOfRange
 	}
 
 	// Calculate the microseconds based on the speed and direction
 	var microseconds uint16
 	if isForward {
-		microseconds = e.halfPulseWidth + speed
-		e.speed = int16(speed)
+		microseconds = h.halfPulseWidth + speed
+		h.speed = int16(speed)
 	} else {
-		microseconds = e.halfPulseWidth - speed
-		e.speed = -int16(speed)
+		microseconds = h.halfPulseWidth - speed
+		h.speed = -int16(speed)
 	}
 
 	// Ensure the microseconds is within the valid range
-	if microseconds < e.minPulseWidth {
+	if microseconds < h.minPulseWidth {
 		return ErrorCodeESCMotorSpeedBelowMinPulseWidth
-	} else if microseconds > e.maxPulseWidth {
+	} else if microseconds > h.maxPulseWidth {
 		return ErrorCodeESCMotorSpeedAboveMaxPulseWidth
 	}
 
 	// Set the servo microseconds if movement is enabled
-	if e.isMovementEnabled != nil && !e.isMovementEnabled() {
-		microseconds = e.halfPulseWidth
+	if h.isMovementEnabled != nil && !h.isMovementEnabled() {
+		microseconds = h.halfPulseWidth
 	} else {
 		// Gradually change the speed to avoid sudden jumps
-		if e.microseconds > microseconds {
-			for us := e.microseconds; us > microseconds; us -= e.changeInterval {
-				e.servo.SetMicroseconds(int16(us))
-				time.Sleep(e.changeIntervalDelay)
+		if h.microseconds > microseconds {
+			for us := h.microseconds; us > microseconds; us -= h.changeInterval {
+				h.servo.SetMicroseconds(int16(us))
+				time.Sleep(h.changeIntervalDelay)
 			}
-		} else if e.microseconds < microseconds {
-			for us := e.microseconds; us < microseconds; us += e.changeInterval {
-				e.servo.SetMicroseconds(int16(us))
-				time.Sleep(e.changeIntervalDelay)
+		} else if h.microseconds < microseconds {
+			for us := h.microseconds; us < microseconds; us += h.changeInterval {
+				h.servo.SetMicroseconds(int16(us))
+				time.Sleep(h.changeIntervalDelay)
 			}
 		}
 
 		// Finally, set the exact microseconds
-		if e.microseconds != microseconds {
-			e.servo.SetMicroseconds(int16(microseconds))
+		if h.microseconds != microseconds {
+			h.servo.SetMicroseconds(int16(microseconds))
 
 			// Update the current microseconds
-			e.microseconds = microseconds
+			h.microseconds = microseconds
 		}
 	}
 
 	// Log the speed change
-	if e.logger != nil {
+	if h.logger != nil {
 		if isForward {
-			e.logger.AddMessageWithUint16(setSpeedForwardPrefix, speed, true, true, false)
+			h.logger.AddMessageWithUint16(setSpeedForwardPrefix, speed, true, true, false)
 		} else {
-			e.logger.AddMessageWithUint16(setSpeedBackwardPrefix, speed, true, true, false)
+			h.logger.AddMessageWithUint16(setSpeedBackwardPrefix, speed, true, true, false)
 		}
-		e.logger.Debug()
+		h.logger.Debug()
 	}
 
 	// Call the after set speed function if provided
-	if e.afterSetSpeedFunc != nil {
-		e.afterSetSpeedFunc(e.speed)
+	if h.afterSetSpeedFunc != nil {
+		h.afterSetSpeedFunc(h.speed)
 	}
 	return tinygotypes.ErrorCodeNil
 }
@@ -205,8 +205,8 @@ func (e *DefaultHandler) SetSpeed(speed uint16, isForward bool) tinygotypes.Erro
 // Returns:
 //
 // The current speed of the ESC motor as an int16 value.
-func (e *DefaultHandler) GetSpeed() int16 {
-	return e.speed
+func (h *DefaultHandler) GetSpeed() int16 {
+	return h.speed
 }
 
 // Stop sets the ESC motor speed to 0 (stop).
@@ -214,8 +214,8 @@ func (e *DefaultHandler) GetSpeed() int16 {
 // Returns:
 //
 // An error if the speed could not be set to 0, otherwise nil.
-func (e *DefaultHandler) Stop() tinygotypes.ErrorCode {
-	return e.SetSpeed(0, true)
+func (h *DefaultHandler) Stop() tinygotypes.ErrorCode {
+	return h.SetSpeed(0, true)
 }
 
 // SetSpeedForward sets the ESC motor speed forward.
@@ -227,8 +227,8 @@ func (e *DefaultHandler) Stop() tinygotypes.ErrorCode {
 // Returns:
 //
 // An error if the speed could not be set, otherwise nil.
-func (e *DefaultHandler) SetSpeedForward(speed uint16) tinygotypes.ErrorCode {
-	return e.SetSpeed(speed, true)
+func (h *DefaultHandler) SetSpeedForward(speed uint16) tinygotypes.ErrorCode {
+	return h.SetSpeed(speed, true)
 }
 
 // SetSpeedBackward sets the ESC motor speed backward.
@@ -240,6 +240,6 @@ func (e *DefaultHandler) SetSpeedForward(speed uint16) tinygotypes.ErrorCode {
 // Returns:
 //
 // An error if the speed could not be set, otherwise nil.
-func (e *DefaultHandler) SetSpeedBackward(speed uint16) tinygotypes.ErrorCode {
-	return e.SetSpeed(speed, false)
+func (h *DefaultHandler) SetSpeedBackward(speed uint16) tinygotypes.ErrorCode {
+	return h.SetSpeed(speed, false)
 }
