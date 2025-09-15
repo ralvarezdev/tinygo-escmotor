@@ -1,5 +1,3 @@
-//go:build tinygo && (rp2040 || rp2350)
-
 package tinygo_escmotor
 
 import (
@@ -8,7 +6,7 @@ import (
 	"machine"
 
 	tinygoservo "tinygo.org/x/drivers/servo"
-	tinygotypes "github.com/ralvarezdev/tinygo-types"
+	tinygoerrors "github.com/ralvarezdev/tinygo-errors"
 	tinygologger "github.com/ralvarezdev/tinygo-logger"
 )
 
@@ -74,7 +72,7 @@ func NewDefaultHandler(
 	isPolarityInverted bool,
 	maxSpeed uint16,
 	logger tinygologger.Logger,
-) (*DefaultHandler, tinygotypes.ErrorCode) {
+) (*DefaultHandler, tinygoerrors.ErrorCode) {
 	// Configure the PWM
 	if err := pwm.Configure(
 		machine.PWMConfig{
@@ -116,7 +114,7 @@ func NewDefaultHandler(
 	// Stop the motor initially
 	_ = handler.Stop()
 
-	return handler, tinygotypes.ErrorCodeNil
+	return handler, tinygoerrors.ErrorCodeNil
 }
 
 // SetSpeed sets the ESC motor speed.
@@ -129,7 +127,7 @@ func NewDefaultHandler(
 // Returns:
 //
 // An error if the speed could not be set, otherwise nil.
-func (h *DefaultHandler) SetSpeed(speed uint16, isForward bool) tinygotypes.ErrorCode {
+func (h *DefaultHandler) SetSpeed(speed uint16, isForward bool) tinygoerrors.ErrorCode {
 	// Check if the is polarity inverted
 	if h.isPolarityInverted {
 		isForward = !isForward
@@ -197,7 +195,7 @@ func (h *DefaultHandler) SetSpeed(speed uint16, isForward bool) tinygotypes.Erro
 	if h.afterSetSpeedFunc != nil {
 		h.afterSetSpeedFunc(h.speed)
 	}
-	return tinygotypes.ErrorCodeNil
+	return tinygoerrors.ErrorCodeNil
 }
 
 // GetSpeed returns the current speed of the ESC motor.
@@ -214,7 +212,7 @@ func (h *DefaultHandler) GetSpeed() int16 {
 // Returns:
 //
 // An error if the speed could not be set to 0, otherwise nil.
-func (h *DefaultHandler) Stop() tinygotypes.ErrorCode {
+func (h *DefaultHandler) Stop() tinygoerrors.ErrorCode {
 	return h.SetSpeed(0, true)
 }
 
@@ -227,7 +225,7 @@ func (h *DefaultHandler) Stop() tinygotypes.ErrorCode {
 // Returns:
 //
 // An error if the speed could not be set, otherwise nil.
-func (h *DefaultHandler) SetSpeedForward(speed uint16) tinygotypes.ErrorCode {
+func (h *DefaultHandler) SetSpeedForward(speed uint16) tinygoerrors.ErrorCode {
 	return h.SetSpeed(speed, true)
 }
 
@@ -240,6 +238,6 @@ func (h *DefaultHandler) SetSpeedForward(speed uint16) tinygotypes.ErrorCode {
 // Returns:
 //
 // An error if the speed could not be set, otherwise nil.
-func (h *DefaultHandler) SetSpeedBackward(speed uint16) tinygotypes.ErrorCode {
+func (h *DefaultHandler) SetSpeedBackward(speed uint16) tinygoerrors.ErrorCode {
 	return h.SetSpeed(speed, false)
 }

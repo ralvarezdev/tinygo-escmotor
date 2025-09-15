@@ -1,8 +1,8 @@
-github.com/ralvarezdev/tinygo-buffers v0.1.2 h1:Vjz0kBxhE8toK2hIWaZ0cj6at3TH+Ra/WUCeibNE4n8=
-github.com/ralvarezdev/tinygo-buffers v0.1.2/go.mod h1:tGklXbGcbTrmFp/+qDUwQ4iSSdeUh/LDYxZ0P+Aeeko=
-github.com/ralvarezdev/tinygo-logger v0.0.8 h1:QolIbrzqa1C1d6B1RSCauFi+P6qao4cz3HR5C1MVmDw=
-github.com/ralvarezdev/tinygo-logger v0.0.8/go.mod h1:Jeu5eEn4KsUBx3YO4W6zZXZF9CalGpeAwFVcVW8POGw=
-github.com/ralvarezdev/tinygo-types v0.0.3 h1:h8ogOD2lOVxR+w5i6o+v/8qTROFA2KBjVXBM7NT3SMc=
-github.com/ralvarezdev/tinygo-types v0.0.3/go.mod h1:2u3ApwAtIqGZ6wDsmUYt44bIk1DEn06INNjtfWndCr4=
+github.com/ralvarezdev/tinygo-buffers v0.1.3 h1:JUuNgQVEAwQ3tp889go63jgTySouquKJJCsPFzk2MOg=
+github.com/ralvarezdev/tinygo-buffers v0.1.3/go.mod h1:Rc0yxPm8saRZ++pRNrY0J/8R7bQ9cU4KSHX8+1BMbJY=
+github.com/ralvarezdev/tinygo-errors v0.0.4 h1:nuqApi7tEzPSSf2/3Uqxxizwftvoxczaec9BA95Hcj4=
+github.com/ralvarezdev/tinygo-errors v0.0.4/go.mod h1:PlkyrG60saZetwFX1mPhve+9l2pneVH7c8q5w4sxe8M=
+github.com/ralvarezdev/tinygo-logger v0.0.9 h1:S19f+yoWqvXJQLas6YJ5dUGRGhR+Qhk64mLGkcfW+dw=
+github.com/ralvarezdev/tinygo-logger v0.0.9/go.mod h1:nkyqp2ph54sYYe6A6XMy9L8aEx7N7jVaVUL9uJCRVFo=
 tinygo.org/x/drivers v0.33.0 h1:5r8Ab0IxjWQi7LzYLNWpya6U4nedo9ZtxeMaAzrJTG8=
 tinygo.org/x/drivers v0.33.0/go.mod h1:ZdErNrApSABdVXjA1RejD67R8SNRI6RKVfYgQDZtKtk=

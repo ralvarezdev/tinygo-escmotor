@@ -1,9 +1,7 @@
-//go:build tinygo && (rp2040 || rp2350)
-
 package tinygo_escmotor
 
 import (
-	tinygotypes "github.com/ralvarezdev/tinygo-types"
+	tinygoerrors "github.com/ralvarezdev/tinygo-errors"
 )
 
 const (
@@ -12,7 +10,7 @@ const (
 )
 
 const (
-	ErrorCodeESCMotorFailedToConfigurePWM tinygotypes.ErrorCode = tinygotypes.ErrorCode(iota + ErrorCodeESCMotorStartNumber)
+	ErrorCodeESCMotorFailedToConfigurePWM tinygoerrors.ErrorCode = tinygoerrors.ErrorCode(iota + ErrorCodeESCMotorStartNumber)
 	ErrorCodeESCMotorFailedToInitializeServo
 	ErrorCodeESCMotorSpeedOutOfRange
 	ErrorCodeESCMotorSpeedBelowMinPulseWidth
