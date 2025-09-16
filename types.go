@@ -229,6 +229,22 @@ func (h *DefaultHandler) SetSpeedForward(speed uint16) tinygoerrors.ErrorCode {
 	return h.SetSpeed(speed, true)
 }
 
+// SafeSetSpeedForward sets the ESC motor speed forward safely.
+//
+// Parameters:
+//
+// speed: Speed value between 0 (stop) and half of the maximum pulse (full forward).
+//
+// Returns:
+//
+// An error if the speed could not be set, otherwise nil.
+func (h *DefaultHandler) SafeSetSpeedForward(speed uint16) tinygoerrors.ErrorCode {
+	if speed > h.maxSpeed {
+		speed = h.maxSpeed
+	}
+	return h.SetSpeed(speed, true)
+}
+
 // SetSpeedBackward sets the ESC motor speed backward.
 //
 // Parameters:
@@ -239,5 +255,21 @@ func (h *DefaultHandler) SetSpeedForward(speed uint16) tinygoerrors.ErrorCode {
 //
 // An error if the speed could not be set, otherwise nil.
 func (h *DefaultHandler) SetSpeedBackward(speed uint16) tinygoerrors.ErrorCode {
+	return h.SetSpeed(speed, false)
+}
+
+// SafeSetSpeedBackward sets the ESC motor speed backward safely.
+//
+// Parameters:
+//
+// speed: Speed value between 0 (stop) and half of the maximum pulse (full backward).
+//
+// Returns:
+//
+// An error if the speed could not be set, otherwise nil.
+func (h *DefaultHandler) SafeSetSpeedBackward(speed uint16) tinygoerrors.ErrorCode {
+	if speed > h.maxSpeed {
+		speed = h.maxSpeed
+	}
 	return h.SetSpeed(speed, false)
 }

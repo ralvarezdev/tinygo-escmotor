@@ -11,6 +11,8 @@ type (
 		SetSpeed(speed uint16, isForward bool) tinygoerrors.ErrorCode
 		Stop() tinygoerrors.ErrorCode
 		SetSpeedForward(speed uint16) tinygoerrors.ErrorCode
+		SafeSetSpeedForward(speed uint16) tinygoerrors.ErrorCode
 		SetSpeedBackward(speed uint16) tinygoerrors.ErrorCode
+		SafeSetSpeedBackward(speed uint16) tinygoerrors.ErrorCode
 	}
 )
