@@ -1,13 +1,14 @@
 package tinygo_escmotor
 
 import (
+	"runtime"
 	"time"
 
 	"machine"
 
-	tinygoservo "tinygo.org/x/drivers/servo"
 	tinygoerrors "github.com/ralvarezdev/tinygo-errors"
 	tinygologger "github.com/ralvarezdev/tinygo-logger"
+	tinygoservo "tinygo.org/x/drivers/servo"
 )
 
 type (
@@ -18,16 +19,16 @@ type (
 		isPolarityInverted  bool
 		frequency           uint16
 		minPulseWidth       uint16
-		halfPulseWidth      uint16
+		neutralPulseWidth      uint16
 		maxPulseWidth       uint16
-		rangePulseWidth     uint16
 		servo              tinygoservo.Servo
 		speed              int16
 		maxSpeed           uint16
 		microseconds       uint16
-		changeInterval    uint16
-		changeIntervalDelay time.Duration
+		intervalSteps    uint16
 		logger             tinygologger.Logger
+		lastUpdate 	   time.Time
+		intervalDelay	   time.Duration
 	}
 )
 
@@ -49,9 +50,9 @@ var (
 // isMovementEnabled: Function to check if movement is enabled
 // frequency: Frequency for the PWM signal
 // minPulseWidth: Minimum pulse width for the ESC motor
+// neutralPulseWidth: Neutral pulse width for the ESC motor
 // maxPulseWidth: Maximum pulse width for the ESC motor
-// changeInterval: The interval to change the speed of the ESC motor
-// changeIntervalDelay: The interval delay to change the speed of the ESC motor
+// intervalSteps: The number of steps to change the speed of the ESC motor
 // isPolarityInverted: Whether the motor polarity is inverted
 // maxSpeed: The maximum speed value for the motor
 // logger: The logger to log messages
@@ -66,9 +67,9 @@ func NewDefaultHandler(
 	isMovementEnabled func() bool,
 	frequency uint16,
 	minPulseWidth uint16,
+	neutralPulseWidth uint16,
 	maxPulseWidth uint16,
-	changeInterval uint16,
-	changeIntervalDelay time.Duration,
+	intervalSteps uint16,
 	isPolarityInverted bool,
 	maxSpeed uint16,
 	logger tinygologger.Logger,
@@ -88,9 +89,10 @@ func NewDefaultHandler(
 		return nil, ErrorCodeESCMotorFailedToInitializeServo
 	}
 
-	// Calculate the half pulse and range pulse
-	halfPulseWidth := (maxPulseWidth + minPulseWidth) / 2
-	rangePulseWidth := maxPulseWidth - minPulseWidth
+	// Check if the neutral pulse width is within the valid range
+	if neutralPulseWidth < minPulseWidth || neutralPulseWidth > maxPulseWidth {
+		return nil, ErrorCodeESCMotorInvalidNeutralPulseWidth
+	}
 
 	// Initialize the ESC motor with the provided parameters
 	handler := &DefaultHandler{
@@ -99,15 +101,14 @@ func NewDefaultHandler(
 		isPolarityInverted:  isPolarityInverted,
 		frequency:           frequency,
 		minPulseWidth:       minPulseWidth,
-		halfPulseWidth:      halfPulseWidth,
+		neutralPulseWidth:      neutralPulseWidth,
 		maxPulseWidth:       maxPulseWidth,
-		changeInterval:      changeInterval,
-		changeIntervalDelay: changeIntervalDelay,
-		rangePulseWidth:     rangePulseWidth,
+		intervalSteps:      intervalSteps,
+		intervalDelay:     time.Duration(1000/frequency) * time.Millisecond,
 		maxSpeed:           maxSpeed,
 		servo:              servo,
 		speed:              0,
-		microseconds:       halfPulseWidth,
+		microseconds:       neutralPulseWidth,
 		logger:             logger,
 	}
 
@@ -141,10 +142,10 @@ func (h *DefaultHandler) SetSpeed(speed uint16, isForward bool) tinygoerrors.Err
 	// Calculate the microseconds based on the speed and direction
 	var microseconds uint16
 	if isForward {
-		microseconds = h.halfPulseWidth + speed
+		microseconds = h.neutralPulseWidth + speed
 		h.speed = int16(speed)
 	} else {
-		microseconds = h.halfPulseWidth - speed
+		microseconds = h.neutralPulseWidth - speed
 		h.speed = -int16(speed)
 	}
 
@@ -157,18 +158,30 @@ func (h *DefaultHandler) SetSpeed(speed uint16, isForward bool) tinygoerrors.Err
 
 	// Set the servo microseconds if movement is enabled
 	if h.isMovementEnabled != nil && !h.isMovementEnabled() {
-		microseconds = h.halfPulseWidth
-	} else {
+		microseconds = h.neutralPulseWidth
+	} else if h.microseconds != microseconds {
+		// Check if it has to sleep the remaining time to match the interval delay
+		if !h.lastUpdate.IsZero() {
+			elapsed := time.Since(h.lastUpdate)
+			
+			// Sleep the remaining time to match the interval delay
+			if elapsed < h.intervalDelay {
+				time.Sleep(h.intervalDelay - elapsed)
+			}
+		}
+
 		// Gradually change the speed to avoid sudden jumps
 		if h.microseconds > microseconds {
-			for us := h.microseconds; us > microseconds; us -= h.changeInterval {
+			for us := h.microseconds; us > microseconds; us -= h.intervalSteps {
 				h.servo.SetMicroseconds(int16(us))
-				time.Sleep(h.changeIntervalDelay)
+				time.Sleep(h.intervalDelay)
+				runtime.Gosched()
 			}
 		} else if h.microseconds < microseconds {
-			for us := h.microseconds; us < microseconds; us += h.changeInterval {
+			for us := h.microseconds; us < microseconds; us += h.intervalSteps {
 				h.servo.SetMicroseconds(int16(us))
-				time.Sleep(h.changeIntervalDelay)
+				time.Sleep(h.intervalDelay)
+				runtime.Gosched()
 			}
 		}
 
@@ -179,6 +192,9 @@ func (h *DefaultHandler) SetSpeed(speed uint16, isForward bool) tinygoerrors.Err
 			// Update the current microseconds
 			h.microseconds = microseconds
 		}
+
+		// Set the last update time
+		h.lastUpdate = time.Now()
 	}
 
 	// Log the speed change
