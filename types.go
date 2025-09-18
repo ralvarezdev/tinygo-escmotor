@@ -118,6 +118,34 @@ func NewDefaultHandler(
 	return handler, tinygoerrors.ErrorCodeNil
 }
 
+// graduallySetMicroseconds gradually sets the microseconds to the target value
+//
+// Parameters:
+// 
+// target: The target microseconds value to set
+func (h *DefaultHandler) graduallySetMicroseconds(target uint16) {
+	// Gradually increment or decrement the microseconds to the target value
+	if h.microseconds < target {
+		for us := h.microseconds; us < target; us += h.intervalSteps {
+			h.servo.SetMicroseconds(int16(us))
+			time.Sleep(h.intervalDelay)
+			runtime.Gosched()
+		}
+	} else if h.microseconds > target {
+		for us := h.microseconds; us > target; us -= h.intervalSteps {
+			h.servo.SetMicroseconds(int16(us))
+			time.Sleep(h.intervalDelay)
+			runtime.Gosched()
+		}
+	}
+
+	// Finally, set the exact microseconds
+	h.servo.SetMicroseconds(int16(target))
+	h.microseconds = target
+	time.Sleep(h.intervalDelay)
+	runtime.Gosched()
+}
+
 // SetSpeed sets the ESC motor speed.
 //
 // Parameters:
@@ -170,28 +198,24 @@ func (h *DefaultHandler) SetSpeed(speed uint16, isForward bool) tinygoerrors.Err
 			}
 		}
 
-		// Gradually change the speed to avoid sudden jumps
-		if h.microseconds > microseconds {
-			for us := h.microseconds; us > microseconds; us -= h.intervalSteps {
-				h.servo.SetMicroseconds(int16(us))
-				time.Sleep(h.intervalDelay)
-				runtime.Gosched()
-			}
-		} else if h.microseconds < microseconds {
-			for us := h.microseconds; us < microseconds; us += h.intervalSteps {
-				h.servo.SetMicroseconds(int16(us))
-				time.Sleep(h.intervalDelay)
-				runtime.Gosched()
-			}
+		// Check if the direction has changed
+		if (h.microseconds < h.neutralPulseWidth && microseconds > h.neutralPulseWidth) ||
+			(h.microseconds > h.neutralPulseWidth && microseconds < h.neutralPulseWidth) {
+			// Set to neutral pulse width first
+			h.graduallySetMicroseconds(h.neutralPulseWidth)
+			time.Sleep(h.intervalDelay)
 		}
 
-		// Finally, set the exact microseconds
-		if h.microseconds != microseconds {
-			h.servo.SetMicroseconds(int16(microseconds))
-
-			// Update the current microseconds
-			h.microseconds = microseconds
+		// Pass through the neutral pulse width if needed
+		if (h.microseconds < h.neutralPulseWidth && microseconds > h.neutralPulseWidth) ||
+			(h.microseconds > h.neutralPulseWidth && microseconds < h.neutralPulseWidth) {
+			// Set to neutral pulse width
+			h.servo.SetMicroseconds(int16(h.neutralPulseWidth))
+			time.Sleep(h.intervalDelay)
 		}
+
+		// Continue with the gradual change until reaching the target microseconds
+		h.graduallySetMicroseconds(microseconds)
 
 		// Set the last update time
 		h.lastUpdate = time.Now()
