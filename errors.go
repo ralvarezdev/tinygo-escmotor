@@ -17,4 +17,5 @@ const (
 	ErrorCodeESCMotorSpeedAboveMaxPulseWidth
 	ErrorCodeESCMotorNilHandler
 	ErrorCodeESCMotorInvalidNeutralPulseWidth
+	ErrorCodeESCMotorUnknownDirection
 )
