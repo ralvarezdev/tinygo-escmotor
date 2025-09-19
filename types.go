@@ -44,6 +44,9 @@ var (
 
 	// stopPrefix is the prefix for the log message when stopping the motor
 	stopPrefix = []byte("Stop ESC Motor")
+
+	// graduallySetMicrosecondsPrefix is the prefix for the log message when gradually setting microseconds
+	graduallySetMicrosecondsPrefix = []byte("Gradually setting ESC Motor to:")
 )
 
 // NewDefaultHandler creates a new instance of DefaultHandler
@@ -139,16 +142,54 @@ func (h *DefaultHandler) graduallySetMicroseconds(target uint16) {
 	// Gradually increment or decrement the microseconds to the target value
 	if h.microseconds < target {
 		for us := h.microseconds; us < target; us += h.intervalSteps {
+			// Log the gradual step
+			if h.logger != nil {
+				h.logger.AddMessageWithUint16(
+					graduallySetMicrosecondsPrefix,
+					us,
+					true,
+					true,
+					false,
+				)
+				h.logger.Debug()
+			}
+
+			// Set the microseconds and wait for the interval delay
 			h.servo.SetMicroseconds(int16(us))
 			time.Sleep(h.intervalDelay)
 			runtime.Gosched()
 		}
 	} else if h.microseconds > target {
 		for us := h.microseconds; us > target; us -= h.intervalSteps {
+			// Log the gradual step
+			if h.logger != nil {
+				h.logger.AddMessageWithUint16(
+					graduallySetMicrosecondsPrefix,
+					us,
+					true,
+					true,
+					false,
+				)
+				h.logger.Debug()
+			}
+
+			// Set the microseconds and wait for the interval delay
 			h.servo.SetMicroseconds(int16(us))
 			time.Sleep(h.intervalDelay)
 			runtime.Gosched()
 		}
+	}
+
+	// Log the final target step
+	if h.logger != nil {
+		h.logger.AddMessageWithUint16(
+			graduallySetMicrosecondsPrefix,
+			target,
+			true,
+			true,
+			false,
+		)
+		h.logger.Debug()
 	}
 
 	// Finally, set the exact microseconds
