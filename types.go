@@ -1,7 +1,6 @@
 package tinygo_escmotor
 
 import (
-	"runtime"
 	"time"
 
 	"machine"
@@ -157,7 +156,6 @@ func (h *DefaultHandler) graduallySetMicroseconds(target uint16) {
 			// Set the microseconds and wait for the interval delay
 			h.servo.SetMicroseconds(int16(us))
 			time.Sleep(h.intervalDelay)
-			runtime.Gosched()
 		}
 	} else if h.microseconds > target {
 		for us := h.microseconds; us > target; us -= h.intervalSteps {
@@ -176,7 +174,6 @@ func (h *DefaultHandler) graduallySetMicroseconds(target uint16) {
 			// Set the microseconds and wait for the interval delay
 			h.servo.SetMicroseconds(int16(us))
 			time.Sleep(h.intervalDelay)
-			runtime.Gosched()
 		}
 	}
 
@@ -196,7 +193,6 @@ func (h *DefaultHandler) graduallySetMicroseconds(target uint16) {
 	h.servo.SetMicroseconds(int16(target))
 	h.microseconds = target
 	time.Sleep(h.intervalDelay)
-	runtime.Gosched()
 }
 
 // SetSpeed sets the ESC motor speed.
