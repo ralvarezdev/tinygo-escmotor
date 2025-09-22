@@ -7,12 +7,10 @@ import (
 type (
 	// Handler is the interface to handle ESC (Electronic Speed Controller) motor operations
 	Handler interface {
-		GetSpeed() int16
-		SetSpeed(speed uint16, direction Direction) tinygoerrors.ErrorCode
+		GetSpeed() float64
 		Stop() tinygoerrors.ErrorCode
-		SetSpeedForward(speed uint16) tinygoerrors.ErrorCode
-		SafeSetSpeedForward(speed uint16) tinygoerrors.ErrorCode
-		SetSpeedBackward(speed uint16) tinygoerrors.ErrorCode
-		SafeSetSpeedBackward(speed uint16) tinygoerrors.ErrorCode
+		SetSpeed(speed float64, direction Direction) tinygoerrors.ErrorCode
+		SetSpeedForward(speed float64) tinygoerrors.ErrorCode
+		SetSpeedBackward(speed float64) tinygoerrors.ErrorCode
 	}
 )

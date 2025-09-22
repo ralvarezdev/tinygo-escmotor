@@ -11,11 +11,14 @@ const (
 
 const (
 	ErrorCodeESCMotorFailedToConfigurePWM tinygoerrors.ErrorCode = tinygoerrors.ErrorCode(iota + ErrorCodeESCMotorStartNumber)
-	ErrorCodeESCMotorFailedToInitializeServo
+	ErrorCodeESCMotorZeroFrequency
 	ErrorCodeESCMotorSpeedOutOfRange
-	ErrorCodeESCMotorSpeedBelowMinPulseWidth
-	ErrorCodeESCMotorSpeedAboveMaxPulseWidth
 	ErrorCodeESCMotorNilHandler
 	ErrorCodeESCMotorInvalidNeutralPulseWidth
+	ErrorCodeESCMotorInvalidMinPulseWidth
+	ErrorCodeESCMotorInvalidMaxPulseWidth
 	ErrorCodeESCMotorUnknownDirection
+	ErrorCodeESCMotorInvalidMaxForwardSpeed
+	ErrorCodeESCMotorInvalidMaxBackwardSpeed
+	ErrorCodeESCMotorFailedToGetPWMChannel
 )

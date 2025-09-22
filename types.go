@@ -8,34 +8,40 @@ import (
 
 	tinygoerrors "github.com/ralvarezdev/tinygo-errors"
 	tinygologger "github.com/ralvarezdev/tinygo-logger"
-	tinygoservo "tinygo.org/x/drivers/servo"
+	tinygopwm "github.com/ralvarezdev/tinygo-pwm"
 )
 
 type (
 	// DefaultHandler is the default implementation to handle ESC (Electronic Speed Controller) motor operations.
 	DefaultHandler struct {
-		afterSetSpeedFunc      func(speed int16)
+		afterSetSpeedFunc      func(speed float64)
 		isMovementEnabled      func() bool
 		isPolarityInverted     bool
 		frequency              uint16
-		minPulseWidth          uint16
-		neutralPulseWidth      uint16
-		maxPulseWidth          uint16
-		servo                  tinygoservo.Servo
-		speed                  int16
+		minPulseWidth          uint32
+		neutralPulseWidth      uint32
+		maxPulseWidth          uint32
+		speed                  float64
 		direction              Direction
-		maxSpeed               uint16
-		microseconds           uint16
-		intervalSteps          uint16
+		maxForwardSpeed        float64
+		maxBackwardSpeed       float64
+		pulse           uint32
+		pulseStep          *uint32
 		logger                 tinygologger.Logger
 		lastUpdate             time.Time
-		intervalDelay          time.Duration
 		backwardToForwardDelay time.Duration
 		forwardToBackwardDelay time.Duration
+		pwm 				  tinygopwm.PWM
+		period 				  uint32
+		periodDelay          time.Duration
+		channel uint8
 	}
 )
 
 var (
+	// setPeriodPrefix is the prefix for the log message when setting the PWM period
+	setPeriodPrefix = []byte("Set ESC Motor PWM period to:")
+
 	// setSpeedForwardPrefix is the prefix for the log message when setting speed forward
 	setSpeedForwardPrefix = []byte("Set ESC Motor speed forward to:")
 
@@ -45,8 +51,8 @@ var (
 	// stopPrefix is the prefix for the log message when stopping the motor
 	stopPrefix = []byte("Stop ESC Motor")
 
-	// graduallySetMicrosecondsPrefix is the prefix for the log message when gradually setting microseconds
-	graduallySetMicrosecondsPrefix = []byte("Gradually setting ESC Motor to:")
+	// graduallySetPulseWidthPrefix is the prefix for the log message when gradually setting the pulse width
+	graduallySetMicrosecondsPrefix = []byte("Gradually set ESC Motor pulse width to:")
 )
 
 // NewDefaultHandler creates a new instance of DefaultHandler
@@ -61,9 +67,10 @@ var (
 // minPulseWidth: Minimum pulse width for the ESC motor
 // neutralPulseWidth: Neutral pulse width for the ESC motor
 // maxPulseWidth: Maximum pulse width for the ESC motor
-// intervalSteps: The number of steps to change the speed of the ESC motor
 // isPolarityInverted: Whether the motor polarity is inverted
-// maxSpeed: The maximum speed value for the motor
+// maxForwardSpeed: The maximum forward percentage speed value for the motor
+// maxBackwardSpeed: The maximum backward percentage speed value for the motor
+// pulseStep: Step value for gradually changing the pulse width
 // backwardToForwardDelay: Delay when changing direction from backward to forward
 // forwardToBackwardDelay: Delay when changing direction from forward to backward
 // logger: The logger to log messages
@@ -72,39 +79,78 @@ var (
 //
 // An instance of DefaultHandler and an error if any occurred during initialization
 func NewDefaultHandler(
-	pwm tinygoservo.PWM,
+	pwm tinygopwm.PWM,
 	pin machine.Pin,
-	afterSetSpeedFunc func(speed int16),
+	afterSetSpeedFunc func(speed float64),
 	isMovementEnabled func() bool,
 	frequency uint16,
-	minPulseWidth uint16,
-	neutralPulseWidth uint16,
-	maxPulseWidth uint16,
-	intervalSteps uint16,
+	minPulseWidth uint32,
+	neutralPulseWidth uint32,
+	maxPulseWidth uint32,
 	isPolarityInverted bool,
-	maxSpeed uint16,
+	maxForwardSpeed float64,
+	maxBackwardSpeed float64,
+	pulseStep *uint32,
 	backwardToForwardDelay time.Duration,
 	forwardToBackwardDelay time.Duration,
 	logger tinygologger.Logger,
 ) (*DefaultHandler, tinygoerrors.ErrorCode) {
+	// Check if the frequency is zero
+	if frequency == 0 {
+		return nil, ErrorCodeESCMotorZeroFrequency
+	}
+
 	// Configure the PWM
+	period := 1e9 / float64(frequency)
 	if err := pwm.Configure(
 		machine.PWMConfig{
-			Period: uint64(time.Second / time.Duration(frequency)),
+			Period: uint64(period),
 		},
 	); err != nil {
 		return nil, ErrorCodeESCMotorFailedToConfigurePWM
 	}
 
-	// Create a new instance of the servo
-	servo, err := tinygoservo.New(pwm, pin)
+	// Log the configured period
+	if logger != nil {
+		logger.AddMessageWithUint32(
+			setPeriodPrefix,
+			uint32(period),
+			true,
+			true,
+			false,
+		)
+		logger.Debug()
+	}
+
+	// Get the channel from the pin
+	channel, err := pwm.Channel(pin)
 	if err != nil {
-		return nil, ErrorCodeESCMotorFailedToInitializeServo
+		return nil, ErrorCodeESCMotorFailedToGetPWMChannel
 	}
 
 	// Check if the neutral pulse width is within the valid range
 	if neutralPulseWidth < minPulseWidth || neutralPulseWidth > maxPulseWidth {
 		return nil, ErrorCodeESCMotorInvalidNeutralPulseWidth
+	}
+
+	// Check if the min pulse width is valid
+	if minPulseWidth == 0 || minPulseWidth >= neutralPulseWidth || minPulseWidth >= uint32(period) {
+		return nil, ErrorCodeESCMotorInvalidMinPulseWidth
+	}
+
+	// Check if the max pulse width is valid
+	if maxPulseWidth == 0 || maxPulseWidth <= neutralPulseWidth || maxPulseWidth >= uint32(period) {
+		return nil, ErrorCodeESCMotorInvalidMaxPulseWidth
+	}
+
+	// Check if the max forward speed is valid
+	if maxForwardSpeed <= 0 || maxForwardSpeed > 1 {
+		return nil, ErrorCodeESCMotorInvalidMaxForwardSpeed
+	}
+
+	// Check if the max backward speed is valid
+	if maxBackwardSpeed <= 0 || maxBackwardSpeed > 1 {
+		return nil, ErrorCodeESCMotorInvalidMaxBackwardSpeed
 	}
 
 	// Initialize the ESC motor with the provided parameters
@@ -116,15 +162,18 @@ func NewDefaultHandler(
 		minPulseWidth:          minPulseWidth,
 		neutralPulseWidth:      neutralPulseWidth,
 		maxPulseWidth:          maxPulseWidth,
-		intervalSteps:          intervalSteps,
-		intervalDelay:          time.Duration(1000/frequency) * time.Millisecond,
+		pulseStep:          pulseStep,
 		backwardToForwardDelay: backwardToForwardDelay,
 		forwardToBackwardDelay: forwardToBackwardDelay,
-		maxSpeed:               maxSpeed,
-		servo:                  servo,
+		maxForwardSpeed: 			 maxForwardSpeed,
+		maxBackwardSpeed:        maxBackwardSpeed,
 		speed:                  0,
-		microseconds:           neutralPulseWidth,
+		pulse:           neutralPulseWidth,
 		logger:                 logger,
+		pwm: 					  pwm,
+		channel: 				  channel,
+		period: 				  uint32(period),
+		periodDelay:          time.Duration(period),
 	}
 
 	// Stop the motor initially
@@ -133,58 +182,62 @@ func NewDefaultHandler(
 	return handler, tinygoerrors.ErrorCodeNil
 }
 
-// graduallySetMicroseconds gradually sets the microseconds to the target value
+// graduallySetPulseWidth gradually sets the pulse width to the pulse value
 //
 // Parameters:
 //
-// target: The target microseconds value to set
-func (h *DefaultHandler) graduallySetMicroseconds(target uint16) {
-	// Gradually increment or decrement the microseconds to the target value
-	if h.microseconds < target {
-		for us := h.microseconds; us < target; us += h.intervalSteps {
+// pulse: The pulse pulse width value to set
+func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
+	// Check if pulse step is nil or zero, set directly
+	if h.pulseStep == nil || *h.pulseStep == 0 {
+		h.pulse = pulse
+		time.Sleep(h.periodDelay)
+		runtime.Gosched()
+		return
+	}
+
+	// Gradually increment or decrement the pulse to the target value
+	if h.pulse < pulse {
+		for i := h.pulse; i < pulse; i += *h.pulseStep {
 			// Log the gradual step
 			if h.logger != nil {
-				h.logger.AddMessageWithUint16(
+				h.logger.AddMessageWithUint32(
 					graduallySetMicrosecondsPrefix,
-					us,
+					i,
 					true,
 					true,
 					false,
 				)
 				h.logger.Debug()
 			}
-
-			// Set the microseconds and wait for the interval delay
-			h.servo.SetMicroseconds(int16(us))
-			time.Sleep(h.intervalDelay)
+			tinygopwm.SetDuty(h.pwm, h.channel, i, h.period)
+			time.Sleep(h.periodDelay)
 			runtime.Gosched()
 		}
-	} else if h.microseconds > target {
-		for us := h.microseconds; us > target; us -= h.intervalSteps {
+	} else if h.pulse > pulse {
+		for i := h.pulse; i > pulse; i -= *h.pulseStep {
 			// Log the gradual step
 			if h.logger != nil {
-				h.logger.AddMessageWithUint16(
+				h.logger.AddMessageWithUint32(
 					graduallySetMicrosecondsPrefix,
-					us,
+					i,
 					true,
 					true,
 					false,
 				)
 				h.logger.Debug()
 			}
-
-			// Set the microseconds and wait for the interval delay
-			h.servo.SetMicroseconds(int16(us))
-			time.Sleep(h.intervalDelay)
+			tinygopwm.SetDuty(h.pwm, h.channel, i, h.period)
+			time.Sleep(h.periodDelay)
 			runtime.Gosched()
 		}
 	}
 
-	// Log the final target step
+	// Log the final pulse step
 	if h.logger != nil {
-		h.logger.AddMessageWithUint16(
+		h.logger.AddMessageWithUint32(
 			graduallySetMicrosecondsPrefix,
-			target,
+			pulse,
 			true,
 			true,
 			false,
@@ -192,10 +245,10 @@ func (h *DefaultHandler) graduallySetMicroseconds(target uint16) {
 		h.logger.Debug()
 	}
 
-	// Finally, set the exact microseconds
-	h.servo.SetMicroseconds(int16(target))
-	h.microseconds = target
-	time.Sleep(h.intervalDelay)
+	// Finally, set the exact pulse width
+	tinygopwm.SetDuty(h.pwm, h.channel, pulse, h.period)
+	h.pulse = pulse
+	time.Sleep(h.periodDelay)
 	runtime.Gosched()
 }
 
@@ -203,14 +256,14 @@ func (h *DefaultHandler) graduallySetMicroseconds(target uint16) {
 //
 // Parameters:
 //
-// speed: Speed value between -half of the maximum pulse (full backward) and half of the maximum pulse (full forward).
+// speed: Speed value between 0 (stop) and maxSpeed (full speed).
 // direction: Direction of the motor.
 //
 // Returns:
 //
 // An error if the speed could not be set, otherwise nil.
 func (h *DefaultHandler) SetSpeed(
-	speed uint16,
+	speed float64,
 	direction Direction,
 ) tinygoerrors.ErrorCode {
 	// Check if the is polarity inverted
@@ -219,51 +272,44 @@ func (h *DefaultHandler) SetSpeed(
 	}
 
 	// Check if the speed is within the valid range
-	if speed > h.maxSpeed {
+	if speed < 0 || speed > 1 {
 		return ErrorCodeESCMotorSpeedOutOfRange
 	}
 
-	// Calculate the microseconds based on the speed and direction
-	var microseconds uint16
+	// Calculate the pulse width based on the speed and direction
+	var pulse uint32
 	switch direction {
 	case DirectionStop:
 		speed = 0
-		microseconds = h.neutralPulseWidth
+		pulse = h.neutralPulseWidth
 	case DirectionForward:
-		microseconds = h.neutralPulseWidth + speed
-		h.speed = int16(speed)
+		pulse = h.neutralPulseWidth + uint32(float64(h.maxPulseWidth-h.neutralPulseWidth)*speed)
+		h.speed = speed
 	case DirectionBackward:
-		microseconds = h.neutralPulseWidth - speed
-		h.speed = -int16(speed)
+		pulse = h.neutralPulseWidth - uint32(float64(h.neutralPulseWidth-h.minPulseWidth)*speed)
+		h.speed = -speed
 	default:
 		return ErrorCodeESCMotorUnknownDirection
 	}
 
-	// Ensure the microseconds is within the valid range
-	if microseconds < h.minPulseWidth {
-		return ErrorCodeESCMotorSpeedBelowMinPulseWidth
-	} else if microseconds > h.maxPulseWidth {
-		return ErrorCodeESCMotorSpeedAboveMaxPulseWidth
-	}
-
-	// Set the servo microseconds if movement is enabled
+	// Set the pulse width if movement is enabled
 	if h.isMovementEnabled != nil && !h.isMovementEnabled() {
-		microseconds = h.neutralPulseWidth
-	} else if h.microseconds != microseconds {
+		pulse = h.neutralPulseWidth
+	} else if h.pulse != pulse {
 		// Check if it has to sleep the remaining time to match the interval delay
 		if !h.lastUpdate.IsZero() {
 			elapsed := time.Since(h.lastUpdate)
 
-			// Sleep the remaining time to match the interval delay
-			if elapsed < h.intervalDelay {
-				time.Sleep(h.intervalDelay - elapsed)
+			// Sleep the remaining time to match the period delay
+			if elapsed < h.periodDelay {
+				time.Sleep(h.periodDelay - elapsed)
 			}
 		}
 
 		// Check if the direction has changed
 		if (h.direction != direction) && (h.direction != DirectionStop) {
 			// Set to neutral pulse width first
-			h.graduallySetMicroseconds(h.neutralPulseWidth)
+			h.graduallySetPulseWidth(h.neutralPulseWidth)
 
 			// Sleep the appropriate delay based on the direction change
 			if direction == DirectionForward {
@@ -273,8 +319,8 @@ func (h *DefaultHandler) SetSpeed(
 			}
 		}
 
-		// Continue with the gradual change until reaching the target microseconds
-		h.graduallySetMicroseconds(microseconds)
+		// Continue with the gradual change until reaching the pulse width
+		h.graduallySetPulseWidth(pulse)
 
 		// Update the current direction
 		h.direction = direction
@@ -293,21 +339,19 @@ func (h *DefaultHandler) SetSpeed(
 			)
 			h.logger.Debug()
 		case DirectionForward:
-			h.logger.AddMessageWithUint16(
+			h.logger.AddMessageWithFloat64(
 				setSpeedForwardPrefix,
 				speed,
 				true,
 				true,
-				false,
 			)
 			h.logger.Debug()
 		case DirectionBackward:
-			h.logger.AddMessageWithUint16(
+			h.logger.AddMessageWithFloat64(
 				setSpeedBackwardPrefix,
 				speed,
 				true,
 				true,
-				false,
 			)
 			h.logger.Debug()
 		}
@@ -325,7 +369,12 @@ func (h *DefaultHandler) SetSpeed(
 // Returns:
 //
 // The current speed of the ESC motor as an int16 value.
-func (h *DefaultHandler) GetSpeed() int16 {
+func (h *DefaultHandler) GetSpeed() float64 {
+	if h.direction == DirectionBackward {
+		return -h.speed
+	} else if h.direction == DirectionForward {
+		return h.speed
+	}
 	return h.speed
 }
 
@@ -342,27 +391,18 @@ func (h *DefaultHandler) Stop() tinygoerrors.ErrorCode {
 //
 // Parameters:
 //
-// speed: Speed value between 0 (stop) and half of the maximum pulse (full forward).
+// speed: Speed value between 0 (stop) and maxForwardSpeed (full forward).
 //
 // Returns:
 //
 // An error if the speed could not be set, otherwise nil.
-func (h *DefaultHandler) SetSpeedForward(speed uint16) tinygoerrors.ErrorCode {
-	return h.SetSpeed(speed, DirectionForward)
-}
-
-// SafeSetSpeedForward sets the ESC motor speed forward safely.
-//
-// Parameters:
-//
-// speed: Speed value between 0 (stop) and half of the maximum pulse (full forward).
-//
-// Returns:
-//
-// An error if the speed could not be set, otherwise nil.
-func (h *DefaultHandler) SafeSetSpeedForward(speed uint16) tinygoerrors.ErrorCode {
-	if speed > h.maxSpeed {
-		speed = h.maxSpeed
+func (h *DefaultHandler) SetSpeedForward(speed float64) tinygoerrors.ErrorCode {
+	// Check if the speed is within the valid range
+	if speed < 0 {
+		speed = 0
+	}
+	if speed > h.maxForwardSpeed {
+		speed = h.maxForwardSpeed
 	}
 	return h.SetSpeed(speed, DirectionForward)
 }
@@ -371,27 +411,18 @@ func (h *DefaultHandler) SafeSetSpeedForward(speed uint16) tinygoerrors.ErrorCod
 //
 // Parameters:
 //
-// speed: Speed value between 0 (stop) and half of the maximum pulse (full backward).
+// speed: Speed value between 0 (stop) and maxBackwardSpeed (full backward).
 //
 // Returns:
 //
 // An error if the speed could not be set, otherwise nil.
-func (h *DefaultHandler) SetSpeedBackward(speed uint16) tinygoerrors.ErrorCode {
-	return h.SetSpeed(speed, DirectionBackward)
-}
-
-// SafeSetSpeedBackward sets the ESC motor speed backward safely.
-//
-// Parameters:
-//
-// speed: Speed value between 0 (stop) and half of the maximum pulse (full backward).
-//
-// Returns:
-//
-// An error if the speed could not be set, otherwise nil.
-func (h *DefaultHandler) SafeSetSpeedBackward(speed uint16) tinygoerrors.ErrorCode {
-	if speed > h.maxSpeed {
-		speed = h.maxSpeed
+func (h *DefaultHandler) SetSpeedBackward(speed float64) tinygoerrors.ErrorCode {
+	// Check if the speed is within the valid range
+	if speed < 0 {
+		speed = 0
+	}
+	if speed > h.maxBackwardSpeed {
+		speed = h.maxBackwardSpeed
 	}
 	return h.SetSpeed(speed, DirectionBackward)
 }
