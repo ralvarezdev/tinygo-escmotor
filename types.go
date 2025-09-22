@@ -38,6 +38,11 @@ type (
 	}
 )
 
+const (
+	// Float64Precision is the precision for float64 values in log messages
+	Float64Precision = 3
+)
+
 var (
 	// setPeriodPrefix is the prefix for the log message when setting the PWM period
 	setPeriodPrefix = []byte("Set ESC Motor PWM period to:")
@@ -342,6 +347,7 @@ func (h *DefaultHandler) SetSpeed(
 			h.logger.AddMessageWithFloat64(
 				setSpeedForwardPrefix,
 				speed,
+				Float64Precision,
 				true,
 				true,
 			)
@@ -350,6 +356,7 @@ func (h *DefaultHandler) SetSpeed(
 			h.logger.AddMessageWithFloat64(
 				setSpeedBackwardPrefix,
 				speed,
+				Float64Precision,
 				true,
 				true,
 			)
