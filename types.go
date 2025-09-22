@@ -195,6 +195,7 @@ func NewDefaultHandler(
 func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
 	// Check if pulse step is nil or zero, set directly
 	if h.pulseStep == nil || *h.pulseStep == 0 {
+		tinygopwm.SetDuty(h.pwm, h.channel, pulse, h.period)
 		h.pulse = pulse
 		time.Sleep(h.periodDelay)
 		runtime.Gosched()
