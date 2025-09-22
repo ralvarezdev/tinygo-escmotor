@@ -56,8 +56,8 @@ var (
 	// stopPrefix is the prefix for the log message when stopping the motor
 	stopPrefix = []byte("Stop ESC Motor")
 
-	// graduallySetPulseWidthPrefix is the prefix for the log message when gradually setting the pulse width
-	graduallySetPulseWidthPrefix = []byte("Gradually set ESC Motor pulse width to:")
+	// setPulseWidthPrefix is the prefix for the log message when gradually setting the pulse width
+	setPulseWidthPrefix = []byte("Set ESC Motor pulse width to:")
 )
 
 // NewDefaultHandler creates a new instance of DefaultHandler
@@ -200,7 +200,7 @@ func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
 				// Log the gradual step
 				if h.logger != nil {
 					h.logger.AddMessageWithUint32(
-						graduallySetPulseWidthPrefix,
+						setPulseWidthPrefix,
 						i,
 						true,
 						true,
@@ -217,7 +217,7 @@ func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
 				// Log the gradual step
 				if h.logger != nil {
 					h.logger.AddMessageWithUint32(
-						graduallySetPulseWidthPrefix,
+						setPulseWidthPrefix,
 						i,
 						true,
 						true,
@@ -235,7 +235,7 @@ func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
 	// Log the final pulse
 	if h.logger != nil {
 		h.logger.AddMessageWithUint32(
-			graduallySetPulseWidthPrefix,
+			setPulseWidthPrefix,
 			pulse,
 			true,
 			true,
