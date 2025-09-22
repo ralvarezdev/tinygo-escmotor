@@ -57,7 +57,7 @@ var (
 	stopPrefix = []byte("Stop ESC Motor")
 
 	// graduallySetPulseWidthPrefix is the prefix for the log message when gradually setting the pulse width
-	graduallySetMicrosecondsPrefix = []byte("Gradually set ESC Motor pulse width to:")
+	graduallySetPulseWidthPrefix = []byte("Gradually set ESC Motor pulse width to:")
 )
 
 // NewDefaultHandler creates a new instance of DefaultHandler
@@ -193,56 +193,49 @@ func NewDefaultHandler(
 //
 // pulse: The pulse pulse width value to set
 func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
-	// Check if pulse step is nil or zero, set directly
-	if h.pulseStep == nil || *h.pulseStep == 0 {
-		tinygopwm.SetDuty(h.pwm, h.channel, pulse, h.period)
-		h.pulse = pulse
-		time.Sleep(h.periodDelay)
-		runtime.Gosched()
-		return
-	}
-
 	// Gradually increment or decrement the pulse to the target value
-	if h.pulse < pulse {
-		for i := h.pulse; i < pulse; i += *h.pulseStep {
-			// Log the gradual step
-			if h.logger != nil {
-				h.logger.AddMessageWithUint32(
-					graduallySetMicrosecondsPrefix,
-					i,
-					true,
-					true,
-					false,
-				)
-				h.logger.Debug()
+	if h.pulseStep != nil {
+		if h.pulse < pulse {
+			for i := h.pulse; i < pulse; i += *h.pulseStep {
+				// Log the gradual step
+				if h.logger != nil {
+					h.logger.AddMessageWithUint32(
+						graduallySetPulseWidthPrefix,
+						i,
+						true,
+						true,
+						false,
+					)
+					h.logger.Debug()
+				}
+				tinygopwm.SetDuty(h.pwm, h.channel, i, h.period)
+				time.Sleep(h.periodDelay)
+				runtime.Gosched()
 			}
-			tinygopwm.SetDuty(h.pwm, h.channel, i, h.period)
-			time.Sleep(h.periodDelay)
-			runtime.Gosched()
-		}
-	} else if h.pulse > pulse {
-		for i := h.pulse; i > pulse; i -= *h.pulseStep {
-			// Log the gradual step
-			if h.logger != nil {
-				h.logger.AddMessageWithUint32(
-					graduallySetMicrosecondsPrefix,
-					i,
-					true,
-					true,
-					false,
-				)
-				h.logger.Debug()
+		} else if h.pulse > pulse {
+			for i := h.pulse; i > pulse; i -= *h.pulseStep {
+				// Log the gradual step
+				if h.logger != nil {
+					h.logger.AddMessageWithUint32(
+						graduallySetPulseWidthPrefix,
+						i,
+						true,
+						true,
+						false,
+					)
+					h.logger.Debug()
+				}
+				tinygopwm.SetDuty(h.pwm, h.channel, i, h.period)
+				time.Sleep(h.periodDelay)
+				runtime.Gosched()
 			}
-			tinygopwm.SetDuty(h.pwm, h.channel, i, h.period)
-			time.Sleep(h.periodDelay)
-			runtime.Gosched()
 		}
 	}
 
-	// Log the final pulse step
+	// Log the final pulse
 	if h.logger != nil {
 		h.logger.AddMessageWithUint32(
-			graduallySetMicrosecondsPrefix,
+			graduallySetPulseWidthPrefix,
 			pulse,
 			true,
 			true,
