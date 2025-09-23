@@ -1,7 +1,6 @@
 package tinygo_escmotor
 
 import (
-	"runtime"
 	"time"
 
 	"machine"
@@ -210,7 +209,6 @@ func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
 				}
 				tinygopwm.SetDuty(h.pwm, h.channel, i, h.period)
 				time.Sleep(h.periodDelay)
-				runtime.Gosched()
 			}
 		} else if h.pulse > pulse {
 			for i := h.pulse; i > pulse; i -= *h.pulseStep {
@@ -227,7 +225,6 @@ func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
 				}
 				tinygopwm.SetDuty(h.pwm, h.channel, i, h.period)
 				time.Sleep(h.periodDelay)
-				runtime.Gosched()
 			}
 		}
 	}
@@ -247,8 +244,6 @@ func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
 	// Finally, set the exact pulse width
 	tinygopwm.SetDuty(h.pwm, h.channel, pulse, h.period)
 	h.pulse = pulse
-	time.Sleep(h.periodDelay)
-	runtime.Gosched()
 }
 
 // SetSpeed sets the ESC motor speed.
