@@ -24,16 +24,17 @@ type (
 		direction              Direction
 		maxForwardSpeed        float64
 		maxBackwardSpeed       float64
-		pulse           uint32
-		pulseStep          *uint32
+		pulse                  uint32
+		pulseStep              *uint32
 		logger                 tinygologger.Logger
 		lastUpdate             time.Time
 		backwardToForwardDelay time.Duration
 		forwardToBackwardDelay time.Duration
-		pwm 				  tinygopwm.PWM
-		period 				  uint32
-		periodDelay          time.Duration
-		channel uint8
+		lastStopTime           time.Time
+		pwm                    tinygopwm.PWM
+		period                 uint32
+		periodDelay            time.Duration
+		channel                uint8
 	}
 )
 
@@ -166,18 +167,18 @@ func NewDefaultHandler(
 		minPulseWidth:          minPulseWidth,
 		neutralPulseWidth:      neutralPulseWidth,
 		maxPulseWidth:          maxPulseWidth,
-		pulseStep:          pulseStep,
+		pulseStep:              pulseStep,
 		backwardToForwardDelay: backwardToForwardDelay,
 		forwardToBackwardDelay: forwardToBackwardDelay,
-		maxForwardSpeed: 			 maxForwardSpeed,
-		maxBackwardSpeed:        maxBackwardSpeed,
+		maxForwardSpeed:        maxForwardSpeed,
+		maxBackwardSpeed:       maxBackwardSpeed,
 		speed:                  0,
-		pulse:           neutralPulseWidth,
+		pulse:                  neutralPulseWidth,
 		logger:                 logger,
-		pwm: 					  pwm,
-		channel: 				  channel,
-		period: 				  uint32(period),
-		periodDelay:          time.Duration(period),
+		pwm:                    pwm,
+		channel:                channel,
+		period:                 uint32(period),
+		periodDelay:            time.Duration(period),
 	}
 
 	// Stop the motor initially
@@ -209,6 +210,11 @@ func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
 				}
 				tinygopwm.SetDuty(h.pwm, h.channel, i, h.period)
 				time.Sleep(h.periodDelay)
+
+				// Update the stop time if it is set to neutral
+				if i == h.neutralPulseWidth {
+					h.lastStopTime = time.Now()
+				}
 			}
 		} else if h.pulse > pulse {
 			for i := h.pulse; i > pulse; i -= *h.pulseStep {
@@ -225,6 +231,11 @@ func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
 				}
 				tinygopwm.SetDuty(h.pwm, h.channel, i, h.period)
 				time.Sleep(h.periodDelay)
+
+				// Update the stop time if it is set to neutral
+				if i == h.neutralPulseWidth {
+					h.lastStopTime = time.Now()
+				}
 			}
 		}
 	}
@@ -244,6 +255,11 @@ func (h *DefaultHandler) graduallySetPulseWidth(pulse uint32) {
 	// Finally, set the exact pulse width
 	tinygopwm.SetDuty(h.pwm, h.channel, pulse, h.period)
 	h.pulse = pulse
+
+	// Update the stop time if it is set to neutral
+	if pulse == h.neutralPulseWidth {
+		h.lastStopTime = time.Now()
+	}
 }
 
 // SetSpeed sets the ESC motor speed.
@@ -304,11 +320,19 @@ func (h *DefaultHandler) SetSpeed(
 		if (h.direction != direction) && (h.direction != DirectionStop) {
 			// Set to neutral pulse width first
 			h.graduallySetPulseWidth(h.neutralPulseWidth)
+		}
 
-			// Sleep the appropriate delay based on the direction change
-			if direction == DirectionForward {
+		// Sleep the appropriate delay based on the direction change
+		if h.direction != DirectionForward && direction == DirectionForward {
+			if !h.lastStopTime.IsZero() {
+				time.Sleep(h.backwardToForwardDelay - time.Since(h.lastStopTime))
+			} else {
 				time.Sleep(h.backwardToForwardDelay)
-			} else if direction == DirectionBackward {
+			}
+		} else if h.direction != DirectionBackward && direction == DirectionBackward {
+			if !h.lastStopTime.IsZero() {
+				time.Sleep(h.forwardToBackwardDelay - time.Since(h.lastStopTime))
+			} else {
 				time.Sleep(h.forwardToBackwardDelay)
 			}
 		}
@@ -318,6 +342,10 @@ func (h *DefaultHandler) SetSpeed(
 
 		// Update the current direction
 		h.direction = direction
+		if direction != DirectionStop {
+			// Reset the last stop time if not stopping
+			h.lastStopTime = time.Time{}
+		}
 
 		// Set the last update time
 		h.lastUpdate = time.Now()
